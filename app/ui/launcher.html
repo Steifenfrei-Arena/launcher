@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Steifenfrei Arena</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="launcher">
+<div class="titlebar">
+  <div class="brand"><img src="img/logo-96.webp" alt="">STEIFENFREI ARENA</div>
+  <span class="stage" data-tt="stage_tip">ALPHA</span>
+  <div class="drag" data-tauri-drag-region></div>
+  <div class="net"><span class="dot" id="netDot"></span><span id="netText"></span></div>
+  <button class="wbtn" data-w="minimize" data-ic="minus"></button>
+  <button class="wbtn" data-w="maximize" data-ic="square"></button>
+  <button class="wbtn close" data-w="close" data-ic="x"></button>
+</div>
+
+<div class="login" id="login" hidden>
+  <div class="box">
+    <img src="img/logo-96.webp" alt="" style="width:88px;height:88px;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,.6)">
+    <h1 data-t="login_title"></h1>
+    <p data-t="login_text"></p>
+    <button class="steam-btn" id="loginBtn"><span data-ic="user"></span><span data-t="login_btn"></span></button>
+    <p class="small" id="loginState"></p>
+    <div class="seg" id="loginLang"><button data-lang="de">Deutsch</button><button data-lang="en">English</button></div>
+  </div>
+</div>
+
+<div class="shell" id="shell" hidden>
+  <nav class="side">
+    <div class="nav on" data-page="start"><span data-ic="home"></span><span data-t="nav_start"></span></div>
+    <div class="nav" data-page="map"><span data-ic="map"></span><span data-t="nav_map"></span></div>
+    <div class="nav" data-page="friends"><span data-ic="users"></span><span data-t="nav_friends"></span><span class="badge" id="badgeFriends" hidden></span></div>
+    <div class="nav" data-page="clan"><span data-ic="shield"></span><span data-t="nav_clan"></span><span class="badge" id="badgeClan" hidden></span></div>
+    <div class="nav" data-page="settings"><span data-ic="gear"></span><span data-t="nav_settings"></span></div>
+    <div class="spacer"></div>
+    <div class="me-card">
+      <div class="avatar" id="meAvatar">?</div>
+      <div class="grow"><div class="who" id="meName">–</div><div class="small muted" id="meSub"></div></div>
+      <button class="btn ghost small" id="logoutBtn" data-tt="logout"><span data-ic="logout"></span></button>
+    </div>
+  </nav>
+  <main class="main">
+    <section class="page on" id="p-start">
+      <div class="card row" id="updateBox" hidden style="border-color:var(--glow)">
+        <span data-ic="check"></span><div class="grow" id="updateText"></div>
+        <button class="btn glow" id="updateBtn"><span data-t="update_get"></span></button>
+      </div>
+      <div class="hero">
+        <div class="in">
+          <div class="grow">
+            <div class="status" id="srvPills"></div>
+          </div>
+          <button class="btn ghost" id="discordBtn"><span data-ic="chat"></span><span data-t="discord"></span></button>
+          <button class="btn glow play" id="playBtn"><span data-ic="play"></span><span data-t="play"></span></button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3 data-t="who_online"></h3>
+          <div class="players" id="playerList"></div>
+        </div>
+        <div class="card">
+          <h3 data-t="overlay_title"></h3>
+          <p class="muted small" style="margin-top:0" data-t="overlay_hint"></p>
+          <div class="keys">
+            <span class="kbd">F6</span><span data-t="key_f6"></span>
+            <span class="kbd">F7</span><span data-t="key_f7"></span>
+            <span class="kbd">F8</span><span data-t="key_f8"></span>
+            <span class="kbd">F9</span><span data-t="key_f9"></span>
+          </div>
+          <p class="row small" style="margin-bottom:0"><span class="dot" id="gameDot"></span><span id="gameText"></span></p>
+        </div>
+        <div class="card">
+          <h3 data-t="news_title"></h3>
+          <p class="muted" data-t="news_discord"></p>
+          <button class="btn" id="discordBtn2"><span data-ic="chat"></span>discord.gg/D3cmcEbU5V</button>
+        </div>
+        <div class="card teaser">
+          <div class="teaser-map" id="teaserWrap"><canvas id="teaserMap"></canvas></div>
+          <div class="row" style="margin-top:12px">
+            <div class="grow small muted" id="teaserStats"></div>
+            <button class="btn small" id="teaserBtn"><span data-ic="map"></span><span data-t="to_map"></span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="p-map"><header><h2 data-t="nav_map"></h2></header><div id="mapRoot"></div></section>
+    <section class="page" id="p-friends"><header><h2 data-t="nav_friends"></h2></header><div id="friendsRoot" class="list" style="gap:16px"></div></section>
+    <section class="page" id="p-clan"><header><h2 data-t="nav_clan"></h2></header><div id="clanRoot" class="list" style="gap:16px"></div></section>
+    <section class="page settings" id="p-settings"><header><h2 data-t="nav_settings"></h2></header><div id="settingsRoot" class="list" style="gap:16px"></div></section>
+  </main>
+</div>
+<script type="module" src="js/launcher.js"></script>
+</body>
+</html>

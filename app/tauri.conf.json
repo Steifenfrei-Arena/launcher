@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Steifenfrei Arena",
+  "version": "0.2.9",
+  "identifier": "de.steifenfrei.arena",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Steifenfrei Arena",
+        "url": "launcher.html",
+        "width": 1180,
+        "height": 740,
+        "minWidth": 960,
+        "minHeight": 620,
+        "center": true,
+        "decorations": false,
+        "resizable": true
+      },
+      {
+        "label": "overlay",
+        "title": "Steifenfrei Overlay",
+        "url": "overlay.html",
+        "width": 1920,
+        "height": 1080,
+        "x": 0,
+        "y": 0,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "resizable": false,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+  }
+}

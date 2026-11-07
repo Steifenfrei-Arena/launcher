@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Steifenfrei Arena Setup</title>
+<link rel="stylesheet" href="setup.css">
+</head>
+<body>
+<div class="titlebar" data-tauri-drag-region>
+  <div class="brand" data-tauri-drag-region><img src="img/logo-96.webp" alt="">STEIFENFREI ARENA</div>
+  <span class="stage" id="stage">ALPHA</span>
+  <div class="drag" data-tauri-drag-region></div>
+  <button class="wbtn close" id="close" aria-label="Schließen">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+</div>
+<main>
+  <h1 id="title"></h1>
+  <p class="lead" id="text"></p>
+  <ul class="facts" id="facts"></ul>
+  <div class="progress" id="progress" hidden>
+    <div class="track"><span id="bar"></span></div>
+    <div class="status" id="status"></div>
+  </div>
+  <div class="actions"><button class="btn primary" id="go"></button></div>
+  <p class="note" id="note"></p>
+</main>
+<script src="setup.js"></script>
+</body>
+</html>

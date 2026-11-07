@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Steifenfrei Overlay</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="overlay">
+<div class="hud" id="hud">
+  <div class="vitals panel" id="vitals"></div>
+  <div class="minimap" id="minimap"><canvas id="mm"></canvas><div class="info" id="mmInfo"></div></div>
+  <div class="compass" id="compass"><div class="strip" id="strip"></div><div class="center"></div></div>
+  <div class="toasts" id="toasts"></div>
+  <div class="servbar" id="servbar"></div>
+</div>
+
+<div class="menu" id="menu" hidden>
+  <div class="top">
+    <div class="tabs" id="tabs">
+      <button data-tab="map" class="on" data-t="nav_map"></button>
+      <button data-tab="friends" data-t="nav_friends"></button>
+      <button data-tab="clan" data-t="nav_clan"></button>
+    </div>
+    <span class="grow"></span>
+    <button class="btn" id="menuClose"><span data-ic="x"></span><span data-t="menu_close"></span></button>
+  </div>
+  <div class="body">
+    <div id="m-map"></div>
+    <div id="m-friends" class="list" style="gap:16px;max-width:900px" hidden></div>
+    <div id="m-clan" class="list" style="gap:16px;max-width:900px" hidden></div>
+  </div>
+</div>
+
+<div class="wheel" id="wheel" hidden>
+  <div class="ring" id="ring">
+    <div class="hub"><b data-t="wheel_title"></b><span class="small muted" data-t="wheel_hint"></span></div>
+  </div>
+</div>
+<script type="module" src="js/overlay.js"></script>
+</body>
+</html>

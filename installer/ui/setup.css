@@ -1,0 +1,57 @@
+/* Installer im Stil des Launchers (app/ui/css/app.css): Nebel-Schwarz, Knochenweiß, Moos-Schimmer;
+   Barlow Condensed (Titel) und Geist (Text). */
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("fonts/barlowc-700.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 100 900; src: url("fonts/geist-latin.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 100 900; src: url("fonts/geist-latinext.woff2") format("woff2");
+  unicode-range: U+0100-024F, U+1E00-1EFF; }
+
+:root {
+  --bg: #060807; --surface-2: #161b17; --surface-3: #1d241f; --line-2: rgba(217, 222, 203, .17);
+  --fg: #e9eadf; --fg-2: #b6baab; --muted: #7c8377; --accent: #e2e8d3; --accent-ink: #0a0d0b;
+  --glow: #b4d197; --glow-soft: rgba(180, 209, 151, .14); --ok: #95d4a3; --warn: #e5b562; --bad: #ee6b5f;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Geist", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { font: 14px/1.5 var(--font-body); color: var(--fg); background: var(--bg); user-select: none; -webkit-font-smoothing: antialiased; }
+/* Banner mit Logo oben, unten ins Schwarz auslaufend; der Text beginnt darunter */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: 198px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(6, 8, 7, .55), transparent 30%, transparent 70%, var(--bg)), url("img/banner-2048.webp") center / cover; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+.titlebar { position: relative; z-index: 2; height: 38px; display: flex; align-items: center; gap: 10px; padding-left: 14px; }
+.brand { display: flex; align-items: center; gap: 9px; font-family: var(--font-display); font-weight: 700; letter-spacing: .18em; font-size: 13px; }
+.brand img { width: 20px; height: 20px; border-radius: 5px; }
+.stage { font-family: var(--font-display); font-weight: 700; font-size: 10.5px; letter-spacing: .16em; color: var(--warn);
+  border: 1px solid rgba(229, 181, 98, .55); background: rgba(16, 13, 7, .85); border-radius: 999px; padding: 1px 8px; }
+.drag { flex: 1; align-self: stretch; }
+.wbtn { width: 46px; height: 38px; display: grid; place-items: center; border: 0; background: transparent; color: var(--fg-2); cursor: pointer; }
+.wbtn.close:hover { background: #c42b1c; color: #fff; }
+
+main { position: relative; z-index: 1; min-height: calc(100vh - 38px); padding: 150px 34px 16px; display: flex; flex-direction: column; gap: 12px; }
+h1 { margin: 0; font: 700 34px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; text-wrap: balance; }
+.lead { margin: 0; color: var(--fg-2); max-width: 46ch; }
+.facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--fg-2); font-size: 12.5px; }
+.facts li { display: flex; align-items: center; gap: 7px; }
+.facts li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 0 3px var(--glow-soft); }
+
+.progress { display: flex; flex-direction: column; gap: 7px; }
+.track { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.track span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #9cc07d, #c8e3ad);
+  transition: width .2s ease; }
+.status { font-size: 12.5px; color: var(--fg-2); min-height: 1.5em; }
+.status.ok { color: var(--ok); }
+.status.bad { color: var(--bad); }
+
+.actions { display: flex; gap: 10px; margin-top: 4px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); background: var(--surface-2);
+  border-radius: 9px; padding: 10px 22px; cursor: pointer; font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.primary:hover { background: #fff; box-shadow: 0 0 0 4px var(--glow-soft); }
+.btn.danger { background: rgba(238, 107, 95, .14); border-color: rgba(238, 107, 95, .45); color: #f6b3ab; }
+.btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.note { margin: auto 0 0; padding-top: 6px; font-size: 11.5px; color: var(--muted); }
+.note b { color: var(--warn); font-weight: 600; }
