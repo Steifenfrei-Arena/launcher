@@ -83,7 +83,7 @@ function updateVitals() {
     else if (show.growthEta) { const s = eta("gr", 1); if (s) extra = t("adult_in", { t: fmtDur(s) }); }
     grVal.innerHTML = `${Math.round(me.gr * 100)}<small>%</small>` + (extra ? `<span class="cap" style="color:var(--fg-2)">${extra}</span>` : "");
   }
-  // Nährstoffe (Rohwerte; 100 % = Diät-Schwelle der Art – noch im Spiel zu prüfen)
+  // Nährstoffe (Rohwerte; 100 % = Hunger-Höchstwert der Art, wie im Diät-Befehl des Spiels)
   const nut = me.nut, ref = me.diet_max;
   nutRow.hidden = !show.nutrients || !nut || !ref;
   let lowest = null;

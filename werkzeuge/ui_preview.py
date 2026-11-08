@@ -57,7 +57,7 @@ window.__handlers = {};
 window.__TAURI__ = {
   core: { invoke: async (cmd, args) => {
     const API = %s, S = window.__session;
-    if (["update_check", "update_install", "play", "window_action", "api_do", "discord_presence"].includes(cmd)) (window.__calls ||= []).push([cmd, args || null]);
+    if (["update_check", "update_install", "play", "window_action", "api_do", "discord_presence", "open_link"].includes(cmd)) (window.__calls ||= []).push([cmd, args || null]);
     if (cmd === "session") return S;
     if (cmd === "api_get") {  // ?srv=EU1 usw. gehört nicht zum Schlüssel; Aufrufe in window.__gets
       (window.__gets ||= []).push(args.path);

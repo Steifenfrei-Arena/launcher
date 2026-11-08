@@ -341,9 +341,22 @@ export async function create3D(root, opts = {}) {
   }
   controls.addEventListener("change", request);
   let species = live.me?.sp;   // „Futter für meine Art“ hängt am eigenen Dino
+  // Kamera samt Blickpunkt zum eigenen Dino schieben, Abstand und Winkel bleiben
+  const myPos = () => (live.me?.alive && live.me.x != null && onMapServer(live.me) ? live.me : null);
+  const moveTo = p => {
+    const d = new THREE.Vector3(sx(p.x), groundAt(p.x, p.y), sz(p.y)).sub(controls.target);
+    controls.target.add(d);
+    camera.position.add(d);
+    controls.update();
+  };
+  let lastMe = myPos();   // dort steht die Kamera beim Öffnen (live.me wird je Nachricht ersetzt, nicht geändert)
   bus.on("live", () => {
     placePlayers(); placePins();
     if (live.me?.sp !== species) { species = live.me?.sp; placeLayers(); }
+    // Nach einem Teleport (Sprung über 300 m) geht die Kamera mit (Ticket #3)
+    const me = myPos();
+    if (me && lastMe && Math.hypot(me.x - lastMe.x, me.y - lastMe.y) > 30000) moveTo(me);
+    if (me) lastMe = me;
     request();
   });
   bus.on("route", () => { placePlayers(); drawRoute(); request(); });
@@ -369,5 +382,6 @@ export async function create3D(root, opts = {}) {
     show() { visible = true; request(); },
     hide() { visible = false; },
     update() { placePlayers(); request(); },
+    toMe() { const me = myPos(); if (me) { moveTo(me); request(); } },
   };
 }

@@ -9,6 +9,7 @@ import { loadSocial, renderClan, renderFriends } from "./social.js";
 import { ADMIN } from "./variant.js";
 
 const DISCORD = "https://discord.gg/D3cmcEbU5V";
+const GITHUB = "https://github.com/Steifenfrei-Arena/launcher";
 
 function fillIcons(root = document) {
   $$("[data-ic]", root).forEach(el => { el.innerHTML = icon(el.dataset.ic); });
@@ -314,7 +315,9 @@ function buildSettings() {
         })),
     MAC ? null : h("div", { class: "opt" }, h("div", { class: "t" }, t("set_start"), h("small", {}, t("set_start_hint"))),
       pick(["ask", "always", "never"], "start_", S.startGame, k => { S.startGame = k; saveSettings(); buildSettings(); }))));
-  right.append(h("div", { class: "card" }, head("star", t("set_about")), h("p", { class: "muted", style: "margin:0" }, t("about_text"))));
+  right.append(h("div", { class: "card" }, head("star", t("set_about")), h("p", { class: "muted", style: "margin:0" }, t("about_text")),
+    h("div", { class: "opt" }, h("div", { class: "t" }, t("about_code"), h("small", {}, "github.com/Steifenfrei-Arena/launcher")),
+      h("button", { class: "btn", onclick: () => invoke("open_link", { url: GITHUB }).catch(e => toast(String(e), "bad")) }, "GitHub"))));
   // Was das Overlay zeigt: Kacheln mit Symbol und Schalter
   const tiles = h("div", { class: "tiles" });
   for (const k of Object.keys(S.show)) {

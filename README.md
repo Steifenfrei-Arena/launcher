@@ -1,7 +1,7 @@
 # Steifenfrei Arena Launcher
 
 Launcher and in-game overlay for the **Steifenfrei Arena** servers of *The Isle – Evrima* (EU1 / EU2).
-**Status: Alpha** – some things may still be buggy.
+**Status: Alpha** – some things may still be buggy. What's new: [CHANGELOG.md](CHANGELOG.md)
 
 🇩🇪 [Deutsche Version weiter unten](#deutsch)
 
@@ -39,7 +39,7 @@ We know that installing a program from a game server takes trust. This is exactl
 
 **Locally on your PC**
 - Settings in the launcher's app data folder. Hotkeys F6–F9 only work while the game is in front.
-- "Play" opens `steam://rungameid/376210`. Links open only for our Discord and Steam.
+- "Play" opens `steam://rungameid/376210`. Links open only for our Discord, Steam and this GitHub page.
 - Discord status via Discord's local interface (`app/src/discord.rs`), switch off under Settings → "Show in Discord".
 
 ## Updates are signed
@@ -86,7 +86,7 @@ Contact: contact@steifenfrei.com · Discord: https://discord.gg/D3cmcEbU5V
 # Deutsch
 
 Launcher und Overlay für die **Steifenfrei-Arena**-Server von *The Isle – Evrima* (EU1 / EU2).
-**Stand: Alpha** – einige Funktionen können noch fehlerhaft sein.
+**Stand: Alpha** – einige Funktionen können noch fehlerhaft sein. Neuigkeiten: [CHANGELOG.md](CHANGELOG.md#deutsch)
 
 ## Funktionen
 

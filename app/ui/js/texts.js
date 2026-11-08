@@ -104,6 +104,7 @@ export const TEXTS = {
     "With every new dino: herbivores see their food plants, grazing and gastroliths, carnivores the AI zones."], online: ["Online", "Online"], offline: ["Offline", "Offline"], privacy: ["Privatsphäre", "Privacy"], layer_gastro: ["Gastrolithen", "Gastroliths"],
   spot_gastro: ["Gastrolithen (Kiesfläche)", "Gastroliths (gravel)"], layer_graze: ["Grasen", "Grazing"],
   spot_graze: ["Grasfläche zum Grasen", "Grass for grazing"], to_map: ["Zur Karte", "Open map"],
+  map_tome: ["Zu mir", "To me"], map_tome_tip: ["Karte zurück zu deinem Dino", "Move the map back to your dino"],
   teaser_stats: ["{water} Trinkwasserstellen · {plants} Futterpflanzen", "{water} drinking spots · {plants} food plants"], layers: ["Ebenen", "Layers"], all: ["alle", "all"], none: ["keine", "none"],
   lg_map: ["Karte", "Map"], lg_plants: ["Essbare Pflanzen", "Edible plants"], lg_zones: ["Zonen", "Zones"], lg_players: ["Spieler", "Players"],
   spot_river: ["Fluss – trinkbar", "River – drinkable"], spot_lake: ["See – trinkbar", "Lake – drinkable"],
@@ -169,7 +170,7 @@ export const TEXTS = {
   sh_life: ["Überlebenszeit und Kills", "Survival time and kills"], sh_minimap: ["Minikarte", "Mini map"],
   sh_compass: ["Kompass", "Compass"], sh_coords: ["Eigene Koordinaten", "Own coordinates"],
   set_account: ["Konto", "Account"], signed_in_as: ["Angemeldet als {name}", "Signed in as {name}"],
-  set_about: ["Über", "About"],
+  set_about: ["Über", "About"], about_code: ["Open Source (GPL-3.0): der ganze Code ist öffentlich", "Open source (GPL-3.0): all the code is public"],
   about_text: ["Steifenfrei Arena Launcher. Das Overlay liest nichts aus dem Spiel – alle Werte kommen vom Server. Schriften: Geist, Barlow Condensed (SIL Open Font License).",
     "Steifenfrei Arena launcher. The overlay never reads the game – all values come from the server. Fonts: Geist, Barlow Condensed (SIL Open Font License)."],
   // Overlay

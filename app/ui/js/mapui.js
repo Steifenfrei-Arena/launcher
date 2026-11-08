@@ -267,6 +267,14 @@ export function mapPanel(root, opts = {}) {
   const box3d = h("div", { class: "map3d", hidden: true }, h("div", { class: "map3d-hint" }, t("map3d_hint")));
   const btn3d = h("button", { class: "btn small layer-btn", title: t("map3d_tip") }, "3D");
   let view3d = null;
+  // „Zu mir“: Karte (2D oder 3D) zurück zum eigenen Dino, der Zoom bleibt
+  const myPos = () => (live.me?.alive && live.me.x != null && onMapServer(live.me) ? live.me : null);
+  const btnMe = h("button", { class: "btn small layer-btn", title: t("map_tome_tip"), onclick: async () => {
+    const me = myPos();
+    if (!me) return;
+    if (!box3d.hidden && view3d) (await view3d).toMe();
+    else { view.center = { x: me.x, y: me.y }; view.redraw(); }
+  } }, icon("user"), t("map_tome"));
   btn3d.onclick = async () => {
     const on = box3d.hidden;
     box3d.hidden = !on;
@@ -291,9 +299,9 @@ export function mapPanel(root, opts = {}) {
   bus.on("mapData", syncSrv);
   bus.on("live", syncSrv);
   syncSrv();
-  const wrap = h("div", { class: "map-wrap" }, canvas, box3d, h("div", { class: "map-tools" }, search, layers, btn3d, srvSeg), coords, routeCard, pop);
+  const wrap = h("div", { class: "map-wrap" }, canvas, box3d, h("div", { class: "map-tools" }, search, layers, btn3d, btnMe, srvSeg), coords, routeCard, pop);
   root.append(wrap);
-  let found = null, followed = false;
+  let found = null, followed = false, lastMe = null;
   const view = new MapView(canvas, {
     onHover: w => { coords.textContent = `X ${fmtNum(m(w.x))} · Y ${fmtNum(m(w.y))}`; },
     onClick: (w, mk, at) => showPop(w, mk, at),
@@ -307,6 +315,11 @@ export function mapPanel(root, opts = {}) {
     view.gastro = !!S.mapLayers.gastro;
     view.route = wp.path;
     view.heading = live.me?.yaw != null ? (live.me.yaw + 90) % 360 : 0;
+    // Nach einem Teleport (Sprung über 300 m) geht die Karte mit, der Zoom bleibt (Ticket #3: Marker war weg)
+    const me = myPos();
+    btnMe.disabled = !me;
+    if (me && lastMe && Math.hypot(me.x - lastMe.x, me.y - lastMe.y) > 30000) view.center = { x: me.x, y: me.y };
+    if (me) lastMe = { x: me.x, y: me.y };
     view.redraw();
     drawRouteCard();
     if (!followed && live.me?.alive && live.me.x != null && canvas.offsetWidth) {

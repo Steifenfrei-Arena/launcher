@@ -20,7 +20,8 @@ const KEYS: &[&str] = &["F6", "F7", "F8", "F9"];
 #[cfg(feature = "admin")]
 const KEYS: &[&str] = &["F6", "F7", "F8", "F9", "F10"];
 const STEAM_RUN: &str = "steam://rungameid/376210";
-const LINKS: [&str; 3] = ["https://discord.gg/D3cmcEbU5V", "https://discord.com/channels/", "https://steamcommunity.com/"];
+const LINKS: [&str; 4] = ["https://discord.gg/D3cmcEbU5V", "https://discord.com/channels/", "https://steamcommunity.com/",
+                          "https://github.com/Steifenfrei-Arena/launcher"];
 
 pub struct Game {
     inner: Mutex<GameState>,
@@ -297,7 +298,7 @@ pub fn play(game: State<Game>) -> Result<&'static str, String> {
     Ok("start")
 }
 
-/// Nur bekannte Links öffnen (Discord-Einladung, Steam-Profile).
+/// Nur bekannte Links öffnen (Discord-Einladung, Steam-Profile, Code auf GitHub).
 #[tauri::command]
 pub fn open_link(url: String) -> Result<(), String> {
     if !LINKS.iter().any(|l| url.starts_with(l)) {
