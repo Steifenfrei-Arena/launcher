@@ -10,6 +10,9 @@ Launcher and in-game overlay for the **Steifenfrei Arena** servers of *The Isle 
 - 🗺️ Live map with your position, waypoint with safe route, water, food, plants and zones (2D and 3D)
 - 📊 Overlay on top of the game: health, hunger, thirst, nutrients, minimap, compass
 - 👥 Friends and clans: positions on the map, signals, emergency call, teleport requests
+- 🦖 Dino page: change dino, growth, size, prime, heal, diet, mutations, sets and teleport
+- 🔔 Windows notifications when a friend comes online or your clan sends an emergency call
+- 🐞 Send a bug report with the launcher log straight from the settings
 - 🔄 Updates itself (signed updates, see below)
 - 💬 Shows your server and dino in Discord (can be turned off)
 
@@ -28,19 +31,27 @@ We know that installing a program from a game server takes trust. This is exactl
 **To our server** (HTTPS to `194.164.193.57:8443`, the launcher only trusts our own certificate `api-ca-cert.pem`)
 - your session token and language, to load server status, map data, friends and clan
 - the actions you click yourself: friend and clan actions, signals, emergency call, teleport requests,
-  settings like "invisible"
+  the dino actions on the "Dino" page, settings like "invisible"
 - update checks and downloads (we count installs and updates as plain numbers, without names)
+- **only when you click "Send bug report"**: your description, the end of the launcher log (at most 40 KB), the
+  launcher version and update channel, your Windows version and the WebView2 version. The team gets this as a
+  support ticket. See `bug_report` in `app/src/net.rs` and `app/src/diag.rs`.
 
 **What it does NOT do**
 - It never opens, reads or changes the game. Your position and stats come from **our game server**, not from your PC.
   On your PC the launcher only uses normal Windows window functions: which window is in front, its title, class and
   size, so the overlay can sit on top (`app/src/game.rs`). That is why it does not bother the anti-cheat.
-- No tracking, no analytics, no reading of your files or hardware.
+- No tracking, no analytics, no reading of your files or hardware. The only thing it reads about your PC is the
+  Windows version name (for the log and the bug report).
 
 **Locally on your PC**
 - Settings in the launcher's app data folder. Hotkeys F6–F9 only work while the game is in front.
 - "Play" opens `steam://rungameid/376210`. Links open only for our Discord, Steam and this GitHub page.
 - Discord status via Discord's local interface (`app/src/discord.rs`), switch off under Settings → "Show in Discord".
+- A log file `launcher.log` in the app data folder (at most about 1 MB). It only holds what the launcher itself
+  does (connection, sign-in, updates, game detected, errors) – never tokens or passwords. It stays on your PC
+  unless you send a bug report.
+- Windows notifications are created on your PC; nothing is sent for them.
 
 ## Updates are signed
 
@@ -93,6 +104,9 @@ Launcher und Overlay für die **Steifenfrei-Arena**-Server von *The Isle – Evr
 - 🗺️ Live-Karte mit deiner Position, Wegpunkt mit sicherer Route, Wasser, Futter, Pflanzen und Zonen (2D und 3D)
 - 📊 Overlay über dem Spiel: Leben, Hunger, Durst, Nährstoffe, Minikarte, Kompass
 - 👥 Freunde und Clans: Positionen auf der Karte, Signale, Notruf, Teleport-Anfragen
+- 🦖 Seite „Dino“: Dino wechseln, Wachstum, Größe, Prime, Heilen, Diät, Mutationen, Sets und Teleport
+- 🔔 Windows-Meldungen, wenn ein Freund online kommt oder dein Clan einen Notruf schickt
+- 🐞 Fehlerbericht mit Launcher-Log direkt aus den Einstellungen senden
 - 🔄 Aktualisiert sich selbst (signierte Updates)
 - 💬 Zeigt Server und Dino in Discord an (abschaltbar)
 
@@ -102,13 +116,19 @@ Launcher und Overlay für die **Steifenfrei-Arena**-Server von *The Isle – Evr
 
 - **Anmeldung** auf der **offiziellen Steam-Seite**. Wir bekommen nur deine **Steam-ID**, nie dein Passwort.
 - **An unseren Server** (HTTPS, nur mit unserem eigenen Zertifikat): Sitzungs-Token und Sprache, um Status, Karte,
-  Freunde und Clan zu laden; die Aktionen, die du selbst anklickst; Update-Abfragen (Installationen und Updates zählen
-  wir nur als Zahl, ohne Namen).
+  Freunde und Clan zu laden; die Aktionen, die du selbst anklickst (auch die Dino-Aktionen auf der Seite „Dino“);
+  Update-Abfragen (Installationen und Updates zählen wir nur als Zahl, ohne Namen).
+- **Nur wenn du „Fehlerbericht senden“ klickst:** deine Beschreibung, das Ende des Launcher-Logs (höchstens 40 KB),
+  Launcher-Version und Update-Kanal, deine Windows-Version und die WebView2-Version. Das Team bekommt das als
+  Support-Ticket (`bug_report` in `app/src/net.rs`, `app/src/diag.rs`).
 - **Nicht:** Das Spiel wird nie geöffnet, gelesen oder verändert. Deine Position und Werte kommen von **unserem
   Spielserver**, nicht von deinem PC. Der Launcher fragt nur ab, welches Fenster vorne ist (Titel, Klasse, Größe).
-  Kein Tracking, keine Auswertung, kein Zugriff auf deine Dateien.
+  Kein Tracking, keine Auswertung, kein Zugriff auf deine Dateien. Über deinen PC liest er nur den Namen der
+  Windows-Version (für das Log und den Fehlerbericht).
 - **Lokal:** Einstellungen im App-Datenordner, Tasten F6–F9 nur, solange das Spiel vorne ist, Discord-Anzeige
-  abschaltbar unter Einstellungen → „In Discord anzeigen“.
+  abschaltbar unter Einstellungen → „In Discord anzeigen“. Dazu eine Log-Datei `launcher.log` im App-Datenordner
+  (höchstens etwa 1 MB): Darin steht nur, was der Launcher selbst tut, nie Tokens oder Passwörter. Sie bleibt auf
+  deinem PC, außer du sendest einen Fehlerbericht. Windows-Meldungen entstehen auf deinem PC, dafür wird nichts gesendet.
 
 Jedes Update ist mit unserem Ed25519-Schlüssel signiert. Der Launcher prüft Signatur, Größe und SHA-256, bevor er es
 installiert (`shared/update.rs`, öffentlicher Schlüssel `update-pubkey.bin`).

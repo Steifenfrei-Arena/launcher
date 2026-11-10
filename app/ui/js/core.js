@@ -22,12 +22,13 @@ const DEFAULTS = {
   updateChannel: "normal",               // Update-Kanal: normal, beta, alpha (nur freigeschaltete)
   startGame: "ask",                      // Spiel beim Start des Launchers: ask, always, never
   discord: true,                         // in Discord anzeigen (Server, Dino, Spielzeit)
+  notify: { online: true, sos: true },   // Windows-Meldung (Launcher im Hintergrund, Spiel aus): Freund online, Clan-Notruf
 };
 let settings = (() => {
   try { return Object.assign(structuredClone(DEFAULTS), JSON.parse(localStorage.getItem("settings") || "{}")); }
   catch { return structuredClone(DEFAULTS); }
 })();
-for (const k of ["show", "mapLayers"]) settings[k] = Object.assign({}, DEFAULTS[k], settings[k]);
+for (const k of ["show", "mapLayers", "notify"]) settings[k] = Object.assign({}, DEFAULTS[k], settings[k]);
 export const S = settings;
 export function saveSettings() {
   try { localStorage.setItem("settings", JSON.stringify(settings)); } catch { /* egal */ }
@@ -38,11 +39,18 @@ window.addEventListener("storage", e => {
   if (e.key !== "settings" || !e.newValue) return;
   try {
     const next = JSON.parse(e.newValue);
-    for (const k of ["show", "mapLayers"]) next[k] = Object.assign({}, DEFAULTS[k], next[k]);
+    for (const k of ["show", "mapLayers", "notify"]) next[k] = Object.assign({}, DEFAULTS[k], next[k]);
     Object.assign(settings, next);
     bus.emit("settings", settings);
   } catch { /* egal */ }
 });
+
+// --- Log (launcher.log im App-Datenordner, für Fehlerberichte): Fehler und Warnmeldungen der Oberfläche ---------
+export function logLine(text) {
+  try { invoke("log_line", { text: String(text).slice(0, 500) })?.catch?.(() => {}); } catch { /* egal */ }
+}
+window.addEventListener("error", e => logLine(`JS-Fehler: ${e.message} (${String(e.filename || "").split("/").pop()}:${e.lineno})`));
+window.addEventListener("unhandledrejection", e => logLine(`JS-Fehler: ${e.reason?.message || e.reason}`));
 
 // --- Kleiner Ereignis-Bus ------------------------------------------------------------------------------
 export const bus = {
@@ -166,6 +174,7 @@ export function toast(text, kind = "") {
   if (!zone) { zone = h("div", { class: "toast-zone" }); document.body.append(zone); }
   const el = h("div", { class: "toast " + kind }, text);
   zone.append(el);
+  if (kind === "bad") logLine("Meldung: " + el.textContent);
   setTimeout(() => el.remove(), kind === "bad" ? 6000 : 3500);
 }
 export async function doAct(body, okText) {

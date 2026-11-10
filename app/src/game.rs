@@ -8,10 +8,15 @@
 //!   F10 Live-Karte aller Spieler – nur im Admin-Launcher (Feature "admin", der baut diese Datei mit)
 //! Im Menü und im Rad nimmt das Overlay kurz den Fokus (Mauszeiger), danach ist wieder das Spiel vorne.
 //! Wechselt man bei offenem Menü zu einem anderen Programm, geht das Menü zu.
+//!
+//! Wichtig: Solange `Game.inner` gesperrt ist, nie Fenster-Funktionen von Tauri oder Tasten (un)registrieren –
+//! beides wartet auf den Haupt-Thread, und der wartet bei einem Tastendruck auf genau diese Sperre (der Launcher
+//! fror ein, wenn man F8 gedrückt hielt, Ticket #4). Erst entscheiden, Sperre lösen, dann ausführen.
 
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
@@ -25,6 +30,7 @@ const LINKS: [&str; 4] = ["https://discord.gg/D3cmcEbU5V", "https://discord.com/
 
 pub struct Game {
     inner: Mutex<GameState>,
+    keys_down: Mutex<HashMap<String, (Instant, bool)>>, // Taste -> (letzter Druck, noch gedrückt)
 }
 
 #[derive(Clone, Default)]
@@ -40,7 +46,7 @@ struct GameState {
 
 impl Default for Game {
     fn default() -> Self {
-        Game { inner: Mutex::new(GameState { hud: true, ..Default::default() }) }
+        Game { inner: Mutex::new(GameState { hud: true, ..Default::default() }), keys_down: Mutex::new(HashMap::new()) }
     }
 }
 
@@ -146,8 +152,8 @@ fn set_keys(app: &AppHandle, on: bool) {
     }
 }
 
-fn emit_state(app: &AppHandle, s: &GameState) {
-    let _ = app.emit("game", json!({"running": s.running, "focused": s.focused, "hud": s.hud, "menu": s.menu}));
+fn state_json(s: &GameState) -> serde_json::Value {
+    json!({"running": s.running, "focused": s.focused, "hud": s.hud, "menu": s.menu})
 }
 
 /// Alle 250 ms: Ist das Spiel vorne? Dann Overlay darüber und Tasten an, sonst beides weg.
@@ -164,48 +170,61 @@ pub fn start(app: AppHandle) {
 fn tick(app: &AppHandle) {
     let front = win::front();
     let ov = overlay_hwnd(app);
-    let game = app.state::<Game>();
-    let mut s = game.inner.lock().unwrap();
-    let before = (s.running, s.focused, s.hud, s.menu.clone());
-    if front.is_game {
-        s.running = true;
-        s.focused = true;
-        s.game_hwnd = front.hwnd;
-        if s.rect != front.rect {
-            s.rect = front.rect;
-            if let Some(w) = app.get_webview_window("overlay") {
-                let (x, y, wdt, hgt) = front.rect;
-                let _ = w.set_position(PhysicalPosition::new(x, y));
-                let _ = w.set_size(PhysicalSize::new(wdt.max(1) as u32, hgt.max(1) as u32));
+    // Unter der Sperre nur entscheiden; ausgeführt wird danach (siehe Kopf der Datei)
+    let (place, menu_closed, visible, keys, changed, running_changed) = {
+        let game = app.state::<Game>();
+        let mut s = game.inner.lock().unwrap();
+        let before = (s.running, s.focused, s.hud, s.menu.clone());
+        let (mut place, mut menu_closed) = (None, false);
+        if front.is_game {
+            s.running = true;
+            s.focused = true;
+            s.game_hwnd = front.hwnd;
+            if s.rect != front.rect {
+                s.rect = front.rect;
+                place = Some(front.rect);
             }
-        }
-    } else if front.hwnd != ov || s.menu.is_none() {
-        s.focused = false;
-        if s.menu.is_some() && front.hwnd != 0 {
-            // anderes Programm vorne (Alt+Tab): Menü zu, sonst läge es über dem anderen Programm
-            s.menu = None;
-            if let Some(w) = app.get_webview_window("overlay") {
-                let _ = w.set_ignore_cursor_events(true);
+        } else if front.hwnd != ov || s.menu.is_none() {
+            s.focused = false;
+            if s.menu.is_some() && front.hwnd != 0 {
+                // anderes Programm vorne (Alt+Tab): Menü zu, sonst läge es über dem anderen Programm
+                s.menu = None;
+                menu_closed = true;
             }
+            if !win::alive(s.game_hwnd) {
+                s.game_hwnd = win::find_game();
+            }
+            s.running = s.game_hwnd != 0;
         }
-        if !win::alive(s.game_hwnd) {
-            s.game_hwnd = win::find_game();
+        let visible = s.hud && (s.focused || s.menu.is_some());
+        let want_keys = s.focused || s.menu.is_some();
+        let keys = (want_keys != s.keys).then_some(want_keys);
+        s.keys = want_keys;
+        let changed = (before != (s.running, s.focused, s.hud, s.menu.clone())).then(|| state_json(&s));
+        (place, menu_closed, visible, keys, changed, (before.0 != s.running).then_some(s.running))
+    };
+    if let Some(w) = app.get_webview_window("overlay") {
+        if let Some((x, y, wdt, hgt)) = place {
+            let _ = w.set_position(PhysicalPosition::new(x, y));
+            let _ = w.set_size(PhysicalSize::new(wdt.max(1) as u32, hgt.max(1) as u32));
         }
-        s.running = s.game_hwnd != 0;
+        if menu_closed {
+            let _ = w.set_ignore_cursor_events(true);
+        }
     }
-    let visible = s.hud && (s.focused || s.menu.is_some());
     if visible {
         win::show_quiet(ov);
     } else {
         win::hide(ov);
     }
-    let want_keys = s.focused || s.menu.is_some();
-    if want_keys != s.keys {
-        s.keys = want_keys;
-        set_keys(app, want_keys);
+    if let Some(on) = keys {
+        set_keys(app, on);
     }
-    if before != (s.running, s.focused, s.hud, s.menu.clone()) {
-        emit_state(app, &s);
+    if let Some(running) = running_changed {
+        crate::diag::log(if running { "Spiel erkannt" } else { "Spiel beendet" });
+    }
+    if let Some(v) = changed {
+        let _ = app.emit("game", v);
     }
 }
 
@@ -214,35 +233,62 @@ fn tick(_app: &AppHandle) {}
 
 /// Menü ("menu"), Signal-Rad ("wheel") öffnen oder schließen ("").
 fn open_menu(app: &AppHandle, mode: &str) {
-    let game = app.state::<Game>();
-    let mut s = game.inner.lock().unwrap();
     let Some(w) = app.get_webview_window("overlay") else { return };
+    let (state, game_hwnd) = {
+        let game = app.state::<Game>();
+        let mut s = game.inner.lock().unwrap();
+        s.menu = (!mode.is_empty()).then(|| mode.to_string());
+        (state_json(&s), s.game_hwnd)
+    };
     if mode.is_empty() {
-        s.menu = None;
         let _ = w.set_ignore_cursor_events(true);
         #[cfg(windows)]
-        win::focus(s.game_hwnd);
+        win::focus(game_hwnd);
     } else {
-        s.menu = Some(mode.to_string());
         let _ = w.set_ignore_cursor_events(false);
         let _ = w.show();
         let _ = w.set_focus();
     }
-    emit_state(app, &s);
+    let _ = game_hwnd;
+    let _ = app.emit("game", state);
+}
+
+/// Gehaltene Taste zählt nur einmal: erst nach dem Loslassen (oder spätestens nach 3 s, falls das Loslassen nicht
+/// ankommt) wirkt sie wieder, und zwei Drücke liegen mindestens 0,3 s auseinander. Sonst schaltete gehaltenes F8 das
+/// Rad dauernd auf und zu (Ticket #4).
+fn key_ok(app: &AppHandle, key: &str, pressed: bool) -> bool {
+    let game = app.state::<Game>();
+    let mut down = game.keys_down.lock().unwrap();
+    if !pressed {
+        if let Some(e) = down.get_mut(key) {
+            e.1 = false;
+        }
+        return false;
+    }
+    if let Some((at, held)) = down.get(key) {
+        if at.elapsed() < Duration::from_millis(300) || (*held && at.elapsed() < Duration::from_secs(3)) {
+            return false;
+        }
+    }
+    down.insert(key.to_string(), (Instant::now(), true));
+    true
 }
 
 pub fn on_hotkey(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
-    if event.state() != ShortcutState::Pressed {
+    let key = shortcut.into_string();
+    if !key_ok(app, &key, event.state() == ShortcutState::Pressed) {
         return;
     }
-    let key = shortcut.into_string();
     let menu = app.state::<Game>().inner.lock().unwrap().menu.clone();
     match key.as_str() {
         "F6" => {
-            let game = app.state::<Game>();
-            let mut s = game.inner.lock().unwrap();
-            s.hud = !s.hud;
-            emit_state(app, &s);
+            let state = {
+                let game = app.state::<Game>();
+                let mut s = game.inner.lock().unwrap();
+                s.hud = !s.hud;
+                state_json(&s)
+            };
+            let _ = app.emit("game", state);
         }
         "F7" => open_menu(app, if menu.as_deref() == Some("menu") { "" } else { "menu" }),
         "F8" => open_menu(app, if menu.as_deref() == Some("wheel") { "" } else { "wheel" }),
@@ -262,10 +308,13 @@ pub fn overlay_menu(app: AppHandle, mode: String) {
 
 #[tauri::command]
 pub fn hud_visible(app: AppHandle, on: bool) {
-    let game = app.state::<Game>();
-    let mut s = game.inner.lock().unwrap();
-    s.hud = on;
-    emit_state(&app, &s);
+    let state = {
+        let game = app.state::<Game>();
+        let mut s = game.inner.lock().unwrap();
+        s.hud = on;
+        state_json(&s)
+    };
+    let _ = app.emit("game", state);
 }
 
 #[tauri::command]
@@ -328,7 +377,10 @@ pub fn window_action(app: AppHandle, action: String) {
                     let _ = w.maximize();
                 }
             }
-            "close" => app.exit(0),
+            "close" => {
+                crate::diag::shutdown(&app);
+                app.exit(0)
+            }
             _ => {}
         }
     }

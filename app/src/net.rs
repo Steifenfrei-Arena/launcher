@@ -62,7 +62,9 @@ fn store_session(app: &AppHandle, s: Option<Session>) {
         match &s {
             Some(s) => {
                 let _ = std::fs::create_dir_all(path.parent().unwrap());
-                let _ = std::fs::write(&path, serde_json::to_vec(s).unwrap_or_default());
+                if let Err(e) = std::fs::write(&path, serde_json::to_vec(s).unwrap_or_default()) {
+                    crate::diag::log(&format!("Anmeldung konnte nicht gespeichert werden: {e}"));
+                }
             }
             None => {
                 let _ = std::fs::remove_file(&path);
@@ -81,10 +83,15 @@ fn token(app: &AppHandle) -> Option<String> {
 /// Beim Start: gespeicherte Sitzung laden und die Live-Verbindung starten.
 pub fn start(app: AppHandle) {
     if let Some(path) = session_file(&app) {
-        if let Ok(data) = std::fs::read(path) {
-            if let Ok(s) = serde_json::from_slice::<Session>(&data) {
-                *app.state::<Net>().session.lock().unwrap() = Some(s);
-            }
+        match std::fs::read(&path) {
+            Ok(data) => match serde_json::from_slice::<Session>(&data) {
+                Ok(s) => {
+                    crate::diag::log("Gespeicherte Anmeldung geladen");
+                    *app.state::<Net>().session.lock().unwrap() = Some(s);
+                }
+                Err(e) => crate::diag::log(&format!("Gespeicherte Anmeldung nicht lesbar: {e}")),
+            },
+            Err(e) => crate::diag::log(&format!("Keine gespeicherte Anmeldung ({e})")),
         }
     }
     tauri::async_runtime::spawn(ws_loop(app));
@@ -105,6 +112,7 @@ fn lang_header(lang: &str) -> &'static str {
 
 async fn answer(res: reqwest::Response, app: &AppHandle) -> Result<Value, String> {
     if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        crate::diag::log(&format!("Abgemeldet: Schnittstelle kennt die Anmeldung nicht ({})", res.url().path()));
         store_session(app, None);
         let _ = app.emit("net", json!({"loggedOut": true}));
         return Err("login".into());
@@ -127,6 +135,25 @@ pub async fn api_get(app: AppHandle, path: String, lang: String) -> Result<Value
         req = req.bearer_auth(tok);
     }
     let res = req.send().await.map_err(|e| e.to_string())?;
+    answer(res, &app).await
+}
+
+/// Fehlerbericht: Beschreibung, Ende des Logs (40 KB, die Schnittstelle nimmt höchstens 64 KB je Anfrage) und Angaben
+/// zum Rechner. Der Bot macht daraus ein Ticket im Discord (nur mit verknüpftem Discord) und gibt den Link zurück.
+#[tauri::command]
+pub async fn bug_report(app: AppHandle, text: String, channel: String, lang: String) -> Result<Value, String> {
+    let tok = token(&app).ok_or("login")?;
+    crate::diag::log("Fehlerbericht wird gesendet");
+    let body = json!({"text": text.chars().take(1000).collect::<String>(), "log": crate::diag::log_tail(40 * 1024),
+                      "info": crate::diag::info(&channel)});
+    let res = http()
+        .post(format!("{API}/api/bugreport"))
+        .bearer_auth(tok)
+        .header("X-Lang", lang_header(&lang))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     answer(res, &app).await
 }
 
@@ -165,8 +192,10 @@ pub async fn update_check(app: AppHandle, channel: String) -> Result<Value, Stri
     let have = env!("CARGO_PKG_VERSION");
     let mut out = json!({"have": have, "channels": d["channels"], "channel": d["channel"], "available": false});
     if d["update"].is_object() {
-        let m = crate::update::verify(&d["update"], "arena", &CHANNELS)?;
+        let m = crate::update::verify(&d["update"], "arena", &CHANNELS)
+            .inspect_err(|e| crate::diag::log(&format!("Update-Prüfung: {e}")))?;
         if crate::update::wanted(&m, have) {
+            crate::diag::log(&format!("Update gefunden: {have} -> {} ({ch})", m.version));
             let from = d["from"].as_str().filter(|c| CHANNELS.contains(c)).unwrap_or("normal").to_string();
             out["available"] = json!(true);
             out["update"] = serde_json::to_value(&m).unwrap_or_default();
@@ -181,8 +210,18 @@ pub async fn update_check(app: AppHandle, channel: String) -> Result<Value, Stri
 #[tauri::command]
 pub async fn update_install(app: AppHandle) -> Result<(), String> {
     let (m, from) = app.state::<crate::update::Pending>().0.lock().unwrap().clone().ok_or("Update: nichts zu tun")?;
+    crate::diag::log(&format!("Update auf {} wird geladen", m.version));
+    let res = update_download(&app, &m, &from).await;
+    if let Err(e) = &res {
+        crate::diag::log(&format!("Update fehlgeschlagen: {e}"));
+    }
+    res
+}
+
+#[cfg(not(feature = "admin"))]
+async fn update_download(app: &AppHandle, m: &crate::update::Manifest, from: &str) -> Result<(), String> {
     let mut req = http().get(format!("{API}/api/update/file?ch={from}&v={}", m.version)).timeout(Duration::from_secs(300));
-    if let Some(tok) = token(&app) {
+    if let Some(tok) = token(app) {
         req = req.bearer_auth(tok);
     }
     let mut res = req.send().await.map_err(|e| e.to_string())?;
@@ -202,11 +241,12 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
             let _ = app.emit("update_progress", pct); // Fortschrittsbalken im Update-Fenster
         }
     }
-    crate::update::check_file(&m, &bytes)?;
+    crate::update::check_file(m, &bytes)?;
     let exe = crate::update::install(&bytes)?;
     if let Ok(dir) = app.path().app_data_dir() {
-        crate::update::save_news(&dir, &m);
+        crate::update::save_news(&dir, m);
     }
+    crate::diag::log(&format!("Update auf {} eingespielt, Neustart", m.version));
     std::process::Command::new(&exe)
         .arg("--updated")
         .spawn()
@@ -224,6 +264,7 @@ pub fn update_news(app: AppHandle) -> Option<Value> {
 
 #[tauri::command]
 pub async fn logout(app: AppHandle) -> Result<(), String> {
+    crate::diag::log("Abgemeldet");
     if let Some(tok) = token(&app) {
         let _ = http().post(format!("{API}/api/logout")).bearer_auth(tok).send().await;
     }
@@ -329,10 +370,13 @@ pub async fn login(app: AppHandle) -> Result<Value, String> {
             let info = json!({"steam": s.steam, "name": s.name});
             store_session(&app, Some(s));
             let _ = app.emit("net", json!({"loggedIn": true}));
+            crate::diag::log("Mit Steam angemeldet");
             return Ok(info);
         }
         reply(&mut sock, "200 OK", PAGE_FAIL).await;
-        return Err(data["msg"].as_str().unwrap_or("login failed").to_string());
+        let msg = data["msg"].as_str().unwrap_or("login failed").to_string();
+        crate::diag::log(&format!("Steam-Anmeldung fehlgeschlagen: {msg}"));
+        return Err(msg);
     }
 }
 
@@ -348,8 +392,10 @@ async fn ws_loop(app: AppHandle) {
         match ws_once(&app, &tok).await {
             Ok(()) => wait = 2,
             Err(e) => {
+                crate::diag::log(&format!("Live-Verbindung: {e}"));
                 let _ = app.emit("net", json!({"connected": false, "error": e}));
                 if e.contains("401") {
+                    crate::diag::log("Abgemeldet: Live-Verbindung abgelehnt (401)");
                     store_session(&app, None);
                     let _ = app.emit("net", json!({"loggedOut": true}));
                 }
@@ -371,6 +417,7 @@ async fn ws_once(app: &AppHandle, tok: &str) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     let _ = app.emit("net", json!({"connected": true}));
+    crate::diag::log("Live-Verbindung steht");
     let net = app.state::<Net>();
     loop {
         tokio::select! {

@@ -7,8 +7,10 @@
 //!           verändert), Overlay zeigen und verstecken, Tasten F6 bis F9.
 //! update  – Selbst-Update mit signierten Versionen (../shared/update.rs, auch im Admin-Launcher).
 //! discord.rs – Anzeige in Discord (Rich Presence: Server, Dino, Spielzeit, auch im Admin-Launcher).
+//! diag.rs – Log-Datei (für Fehlerberichte) und Windows-Meldungen (Freund online, Clan-Notruf).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod diag;
 mod discord;
 mod game;
 mod net;
@@ -33,6 +35,7 @@ fn main() {
         .manage(game::Game::default())
         .manage(update::Pending::default())
         .setup(|app| {
+            diag::init(app.handle());
             // Das Overlay lässt Klicks von Anfang an durch (nur im Menü und im Signal-Rad nicht)
             if let Some(ov) = app.get_webview_window("overlay") {
                 let _ = ov.set_ignore_cursor_events(true);
@@ -45,6 +48,7 @@ fn main() {
         .on_window_event(|window, event| {
             // Launcher zu = Programm beenden (das Overlay hängt am Launcher)
             if window.label() == "main" && matches!(event, WindowEvent::CloseRequested { .. }) {
+                diag::shutdown(window.app_handle());
                 window.app_handle().exit(0);
             }
         })
@@ -57,6 +61,9 @@ fn main() {
             net::update_check,
             net::update_install,
             net::update_news,
+            net::bug_report,
+            diag::log_line,
+            diag::notify,
             game::play,
             game::open_link,
             game::overlay_menu,

@@ -1,5 +1,6 @@
 // Launcher-Fenster: Anmeldung, Start (Status, Spielen), Karte, Freunde, Clan, Einstellungen.
-import { $, $$, MAC, api, applyTexts, bus, doAct, fmtTod, h, invoke, listen, live, S, saveSettings, t, toast } from "./core.js";
+import { $, $$, MAC, api, applyTexts, bus, doAct, fmtTod, h, invoke, listen, live, logLine, S, saveSettings, t, toast } from "./core.js";
+import { dinoPanel } from "./dino.js";
 import { icon } from "./icons.js";
 import { MapView } from "./map.js";
 import { isWaypoint, loadMapData, mapPanel } from "./mapui.js";
@@ -28,11 +29,15 @@ function setLang(lang) {
 
 // --- Fenster und Navigation --------------------------------------------------------------------------
 $$(".wbtn").forEach(b => b.addEventListener("click", () => invoke("window_action", { action: b.dataset.w })));
-let mapBuilt = false;
+let mapBuilt = false, dino = null;
 function show(page) {
   $$(".nav").forEach(n => n.classList.toggle("on", n.dataset.page === page));
   $$(".page").forEach(p => p.classList.toggle("on", p.id === "p-" + page));
   if (page === "map" && !mapBuilt) { mapBuilt = true; mapPanel($("#mapRoot")); }
+  if (page === "dino") {  // Dino-Seite: erst beim ersten Öffnen bauen, danach beim Öffnen gleich neu laden
+    if (dino) dino.reload();
+    else dino = dinoPanel($("#dinoRoot"), () => $("#p-dino").classList.contains("on"));
+  }
 }
 $$(".nav").forEach(n => n.addEventListener("click", () => show(n.dataset.page)));
 
@@ -62,12 +67,19 @@ async function enter(session) {
   $("#meName").textContent = session.name || session.steam;
   $("#meAvatar").textContent = (session.name || "?").trim().charAt(0).toUpperCase();
   $("#meSub").textContent = session.steam;
-  buildSettings();
-  if (startDone) askPlay();
-  await loadSocial();
-  await loadMapData();
+  // Ein Fehler beim Laden darf nicht zurück zur Anmeldung führen – die Anmeldung gilt ja weiter (Ticket #4:
+  // „nach jedem Neustart wieder anmelden“). Nur ins Log schreiben.
+  try {
+    buildSettings();
+    if (startDone) askPlay();
+    await loadSocial();
+    await loadMapData();
+  } catch (e) {
+    logLine("Laden nach der Anmeldung: " + (e?.message || e));
+  }
 }
-function leave() {
+function leave(why) {
+  if (why) logLine("Anmelde-Bildschirm: " + why);
   live.session = null;
   $("#shell").hidden = true;
   $("#login").hidden = false;
@@ -88,7 +100,7 @@ $("#loginBtn").addEventListener("click", async () => {
 $("#logoutBtn").addEventListener("click", async () => { await invoke("logout"); leave(); });
 
 function showNet(n = {}) {
-  if (n.loggedOut) leave();
+  if (n.loggedOut) leave("Anmeldung ungültig");
   const on = !!live.connected;
   $("#netDot").className = "dot" + (on ? " on" : "");
   $("#netText").textContent = on ? t("connected") : t("disconnected");
@@ -133,22 +145,31 @@ function modal(...children) {
 
 // --- Selbst-Update --------------------------------------------------------------------------------------
 // Beim Start: neue Version laden, Signatur prüfen (im Rust-Teil), neu starten. Nie während das Spiel läuft: dann
-// beim nächsten Start, ein Pflicht-Update gleich nach dem Spielen. Danach alle 30 min nur auf Pflicht-Updates prüfen.
+// beim nächsten Start, ein Pflicht-Update gleich nach dem Spielen. Danach alle 30 min prüfen: Pflicht-Updates kommen
+// sofort, sonst ein Hinweis mit „Jetzt aktualisieren“. „Nach Update suchen“ in den Einstellungen prüft sofort.
 let upd = null, updating = false, gameRunning = false, appVersion = "", updChannels = ["normal", "beta"], updChannel = null;
 let updBar = null;  // Fortschritt im Update-Fenster: [Balken, Prozent-Text]
 listen("update_progress", p => { if (updBar) { updBar[0].style.width = p + "%"; updBar[1].textContent = p + " %"; } });
-async function checkUpdate(atStart) {
+async function checkUpdate(atStart, manual = false) {
   let u;
-  try { u = await invoke("update_check", { channel: S.updateChannel }); } catch { return false; }
+  try { u = await invoke("update_check", { channel: S.updateChannel }); }
+  catch (e) { if (manual) toast(t("upd_check_failed", { e: String(e) }), "bad"); return false; }
   if (String(u.channels) !== String(updChannels) || u.channel !== updChannel) {
     updChannels = u.channels || updChannels;
     updChannel = u.channel;
     buildSettings();
   }
-  if (!u.available || (!atStart && !u.update.mandatory)) return false;
+  if (!u.available) { if (manual) toast(t("upd_latest", { v: appVersion })); return false; }
   upd = u.update;
   if (gameRunning) { updateBox(); return false; }
-  return installUpdate();
+  if (atStart || upd.mandatory) return installUpdate();
+  updateBox();  // Hinweis auf der Startseite
+  if (manual) {
+    const dlg = modal(h("h3", {}, t("upd_ready", { v: upd.version })), h("p", { class: "muted" }, t("upd_ready_hint")),
+      h("div", { class: "row" }, h("button", { class: "btn glow", onclick: () => { dlg.close(); installUpdate(); } }, t("upd_now")),
+        h("button", { class: "btn", onclick: () => dlg.close() }, t("upd_later"))));
+  }
+  return false;
 }
 async function installUpdate() {
   if (updating) return true;
@@ -176,7 +197,7 @@ function updateBox(err) {
     return;
   }
   $("#updateText").textContent = err ? t("upd_failed", { e: err })
-    : t(upd.mandatory ? "upd_mandatory_game" : "upd_after_game", { v: upd.version });
+    : t(upd.mandatory ? "upd_mandatory_game" : gameRunning ? "upd_after_game" : "upd_ready", { v: upd.version });
   $("#updateBtn").textContent = err ? t("update_get") : t("upd_now");
   $("#updateBtn").onclick = err ? discord : installUpdate;
   $("#updateBox").hidden = false;
@@ -250,9 +271,20 @@ function presence() {
 for (const ev of ["live", "settings"]) bus.on(ev, presence);
 listen("game", presence);
 
-// Hinweise außerhalb des Spiels
-bus.on("online", o => toast(t("online_from", { name: o.name })));
-bus.on("emergency", s => toast(t("sos_from", { name: s.name }), "bad"));
+// Hinweise außerhalb des Spiels; ist der Launcher im Hintergrund und läuft das Spiel nicht, auch als Windows-Meldung
+// (im Spiel zeigt das Overlay sie)
+function winNotify(kind, title, body) {
+  if (MAC || S.notify?.[kind] === false || document.hasFocus() || gameRunning) return;
+  invoke("notify", { title, body }).catch(e => logLine("Windows-Meldung: " + e));
+}
+bus.on("online", o => {
+  toast(t("online_from", { name: o.name }));
+  winNotify("online", t("ntf_online_title"), t("ntf_online", { name: o.name }));
+});
+bus.on("emergency", s => {
+  toast(t("sos_from", { name: s.name }), "bad");
+  winNotify("sos", t("ntf_sos_title"), t("ntf_sos", { name: s.name }));
+});
 bus.on("point", p => toast(p.wp ? t(isWaypoint(p) ? "wp_from" : "wp_offer", { name: p.name }) : t("point_from", { name: p.name, label: p.label || "📍" })));
 bus.on("tp_request", r => {
   const el = h("div", {}, t("tp_from", { name: r.name }), " ",
@@ -262,6 +294,30 @@ bus.on("tp_request", r => {
 });
 bus.on("tp_done", d => toast((S.lang === "en" && d.msg_en) || d.msg || (d.ok ? "✓" : "✗"), d.ok ? "" : "bad"));
 bus.on("arrived", () => toast(t("arrived")));
+
+// --- Fehlerbericht: Beschreibung + Launcher-Log + Version → Ticket im Discord (Rust: bug_report) --------------
+function bugReport() {
+  const text = h("textarea", { class: "input", rows: 5, maxlength: 1000, placeholder: t("bug_what"), style: "resize:vertical" });
+  const msg = h("p", { class: "small", hidden: true });
+  const send = h("button", { class: "btn primary" }, t("bug_send"));
+  const dlg = modal(h("h3", {}, t("bug_btn")), text, h("p", { class: "muted small" }, t("bug_note")), msg,
+    h("div", { class: "row" }, send, h("button", { class: "btn", onclick: () => dlg.close() }, t("cancel"))));
+  text.focus();
+  send.addEventListener("click", async () => {
+    const say = (m, bad) => { msg.textContent = m; msg.hidden = false; msg.style.color = bad ? "var(--bad)" : ""; };
+    if (text.value.trim().length < 15) return say(t("bug_short"), true);
+    send.disabled = true;
+    let r;
+    try { r = await invoke("bug_report", { text: text.value.trim(), channel: updChannel || S.updateChannel || "admin", lang: S.lang }); }
+    catch (e) { r = { ok: false, msg: e === "login" ? t("err_login") : String(e) }; }
+    send.disabled = false;
+    if (!r?.ok) return say(r?.msg || "✗", true);
+    dlg.close();
+    const done = modal(h("h3", {}, "✓"), h("p", {}, r.msg),
+      h("div", { class: "row" }, r.link ? h("button", { class: "btn glow", onclick: () => { invoke("open_link", { url: r.link }).catch(() => {}); done.close(); } },
+        icon("chat"), t("bug_open")) : null, h("button", { class: "btn", onclick: () => done.close() }, t("ok"))));
+  });
+}
 
 // --- Einstellungen ------------------------------------------------------------------------------------
 function slider(label, key, min, max, step, fmt) {
@@ -304,8 +360,17 @@ function buildSettings() {
   // Launcher: Update-Kanal (Alpha nur für freigeschaltete Spieler) und was beim Start mit dem Spiel passiert
   const pick = (keys, prefix, cur, fn) => h("div", { class: "seg" }, keys.map(k => h("button", { class: k === cur ? "on" : "",
     onclick: () => fn(k) }, t(prefix + k))));
+  const checkBtn = h("button", { class: "btn" }, icon("download"), t("upd_check"));
+  checkBtn.addEventListener("click", async () => {
+    checkBtn.disabled = true;
+    checkBtn.lastChild.textContent = t("upd_checking");
+    if (ADMIN) bus.emit("update_check_manual");  // Admin-Launcher: Updates über die Webseite (admin-ext.js)
+    else await checkUpdate(false, true);
+    setTimeout(() => { checkBtn.disabled = false; checkBtn.lastChild.textContent = t("upd_check"); }, ADMIN ? 3000 : 0);
+  });
   left.append(h("div", { class: "card" }, head("download", t("set_launcher")),
-    ADMIN ? h("div", { class: "opt" }, h("div", { class: "t" }, t("set_version", { v: appVersion || "–" }), h("small", {}, t("set_admin_updates"))))
+    h("div", { class: "opt" }, h("div", { class: "t" }, t("set_version", { v: appVersion || "–" })), checkBtn),
+    ADMIN ? h("div", { class: "opt" }, h("div", { class: "t" }, h("small", {}, t("set_admin_updates"))))
       : h("div", { class: "opt" }, h("div", { class: "t" }, t("set_channel"), h("small", {}, t("set_channel_hint", { v: appVersion || "–" }))),
         pick(updChannels, "ch_", updChannel || S.updateChannel, k => {
           S.updateChannel = updChannel = k;
@@ -315,6 +380,24 @@ function buildSettings() {
         })),
     MAC ? null : h("div", { class: "opt" }, h("div", { class: "t" }, t("set_start"), h("small", {}, t("set_start_hint"))),
       pick(["ask", "always", "never"], "start_", S.startGame, k => { S.startGame = k; saveSettings(); buildSettings(); }))));
+  // Windows-Meldungen (nicht auf dem Mac) und Fehlerbericht
+  if (!MAC) {
+    const sw = key => {
+      const cb = h("input", { type: "checkbox" });
+      cb.checked = S.notify?.[key] !== false;
+      cb.addEventListener("change", () => { S.notify = { ...S.notify, [key]: cb.checked }; saveSettings(); });
+      return h("span", { class: "switch" }, cb, h("span"));
+    };
+    right.append(h("div", { class: "card" }, head("signal", t("set_notify")),
+      h("p", { class: "muted small", style: "margin-top:0" }, t("set_notify_hint")),
+      h("label", { class: "opt" }, h("div", { class: "t" }, t("set_notify_online")), sw("online")),
+      h("label", { class: "opt" }, h("div", { class: "t" }, t("set_notify_sos")), sw("sos")),
+      h("div", { class: "opt" }, h("div", { class: "t" }), h("button", { class: "btn small", onclick: () =>
+        invoke("notify", { title: "Steifenfrei Arena", body: t("ntf_test") }).catch(e => toast(String(e), "bad")) }, t("set_notify_test")))));
+  }
+  right.append(h("div", { class: "card" }, head("flag", t("set_help")),
+    h("div", { class: "opt" }, h("div", { class: "t" }, t("bug_btn"), h("small", {}, t("bug_hint"))),
+      h("button", { class: "btn", onclick: bugReport }, icon("chat"), t("bug_btn")))));
   right.append(h("div", { class: "card" }, head("star", t("set_about")), h("p", { class: "muted", style: "margin:0" }, t("about_text")),
     h("div", { class: "opt" }, h("div", { class: "t" }, t("about_code"), h("small", {}, "github.com/Steifenfrei-Arena/launcher")),
       h("button", { class: "btn", onclick: () => invoke("open_link", { url: GITHUB }).catch(e => toast(String(e), "bad")) }, "GitHub"))));
@@ -338,7 +421,7 @@ showNet();
 renderFriends($("#friendsRoot"));
 renderClan($("#clanRoot"));
 invoke("game_state").then(showGame).catch(() => {});
-invoke("session").then(s => (s ? enter(s) : leave())).catch(leave);
+invoke("session").catch(() => null).then(s => (s ? enter(s) : leave("keine gespeicherte Anmeldung")));
 refreshStatus();
 invoke("app_version").then(v => { appVersion = v; buildSettings(); }).catch(() => {});
 (async () => {

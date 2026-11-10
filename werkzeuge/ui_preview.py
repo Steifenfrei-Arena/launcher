@@ -51,13 +51,30 @@ API = {"/api/status": {"ok": True, "online": True, "count": 3, "fps": 30, "tod":
        "/api/territories": {"ok": True, "cell": 10000, "clans": [{"id": 1, "color": "#e5b562", "cells": [[1, 2], [2, 2], [1, 3], [2, 3]]}]},
        "/api/clans": {"ok": True, "clans": [{"id": 1, "name": "Rudel der Steifen", "tag": "RDS", "color": "#e5b562", "emblem": "🦖", "members": 3}]},
        "/api/mutations": {"ok": True, "species": {"tyrannosaurus": {"Hematophagy": "Restore some thirst when eating",
-                                                                    "Featherweight": "Make less noise when moving"}}}}
+                                                                    "Featherweight": "Make less noise when moving"}}},
+       # Dino-Seite: wie /api/panel des Bots (gleiche Daten wie im Panel auf steifenfrei.com)
+       "/api/panel": {"ok": True, "online": True, "server": "EU1", "admin": False,
+                      "dino": {"species": "Tyrannosaurus", "growth": 0.75, "prime": True, "paused": False, "look": 1.5,
+                               "mutations": ["Hematophagy", "Featherweight"]},
+                      "dinos": [{"name": n, "diet": d} for n, d in (("Allosaurus", 0), ("Stegosaurus", 1), ("Tyrannosaurus", 0),
+                                                                    ("Gallimimus", 2))],
+                      "mutations": [{"name": "Hematophagy", "type": 0, "desc": "Restore some thirst when eating"},
+                                    {"name": "Featherweight", "type": 2, "desc": "Less fall damage"},
+                                    {"name": "Reabsorption", "type": 3, "desc": "Exceptional"}],
+                      "orte": ["Delta", "Sumpf"], "linked": True, "max_sets": 10,
+                      "sets": [{"id": 1, "name": "Mein Rex", "species": "Tyrannosaurus", "growth": 1.0, "prime": True,
+                                "mutations": ["Hematophagy"]}],
+                      "wait": {"dino": 0, "tp": 12}, "cooldown": {"dino": 5, "tp": 60},
+                      "tp_targets": [{"steam": B, "name": "Bert", "rel": "friend"}]},
+       "/api/panel/mutations": {"ok": True, "mutations": [{"name": "Hematophagy", "type": 0, "desc": "x"}]}}
 STUB = """
 window.__handlers = {};
 window.__TAURI__ = {
   core: { invoke: async (cmd, args) => {
     const API = %s, S = window.__session;
-    if (["update_check", "update_install", "play", "window_action", "api_do", "discord_presence", "open_link"].includes(cmd)) (window.__calls ||= []).push([cmd, args || null]);
+    if (["update_check", "update_install", "play", "window_action", "api_do", "discord_presence", "open_link", "notify", "bug_report"].includes(cmd)) (window.__calls ||= []).push([cmd, args || null]);
+    if (cmd === "log_line") { (window.__log ||= []).push(args.text); return null; }
+    if (cmd === "bug_report") return window.__bug || {ok: true, msg: "Dein Ticket #9 ist offen – weiter geht es in deinem Ticket-Kanal im Discord.", link: "https://discord.com/channels/1/9"};
     if (cmd === "session") return S;
     if (cmd === "api_get") {  // ?srv=EU1 usw. gehört nicht zum Schlüssel; Aufrufe in window.__gets
       (window.__gets ||= []).push(args.path);
@@ -316,6 +333,112 @@ def start_flow(b, session):
     pg.context.close()
 
 
+def features_flow(b, session):
+    """Dino-Seite, „Nach Update suchen“, Hinweis bei neuer Version, Windows-Meldungen, Fehlerbericht, Log der Oberfläche."""
+    calls = lambda pg, cmd: [c[1] for c in pg.evaluate("window.__calls || []") if c[0] == cmd]
+    modal = lambda pg: pg.inner_text(".dlg") if pg.locator(".dlg").count() else ""
+    # Dino-Seite: Stand, Knöpfe, Wartezeit beim Teleport, Aktion schickt dino_heal
+    pg = page_for(b, "launcher.html", session, init={"__gameRunning": False})
+    pg.evaluate("document.querySelectorAll('.dlg').forEach(d => d.remove())")
+    pg.click(".nav[data-page=dino]")
+    pg.wait_for_timeout(500)
+    text = pg.inner_text("#dinoRoot")
+    if "Tyrannosaurus" not in text or "Mein Rex" not in text or "Teleport: 12 s" not in text and "Teleport: 11 s" not in text:
+        errors.append("Dino-Seite: " + text[:200])
+    if not pg.locator("#dinoRoot button:has-text('Hin')").is_disabled():
+        errors.append("Dino-Seite: Teleport trotz Wartezeit möglich")
+    pg.click("#dinoRoot button:has-text('Heilen')")
+    pg.wait_for_timeout(300)
+    if not any(c["body"] == {"action": "dino_heal"} for c in calls(pg, "api_do")):
+        errors.append(f"Dino-Seite: Heilen schickt nichts {calls(pg, 'api_do')}")
+    pg.screenshot(path=str(OUT / "dino.png"))
+    # Einstellungen: Nach Update suchen – keine neue Version
+    pg.click(".nav[data-page=settings]")
+    pg.click("#settingsRoot button:has-text('Nach Update suchen')")
+    pg.wait_for_timeout(300)
+    if "neueste Version" not in pg.inner_text(".toast-zone"):
+        errors.append("Nach Update suchen (aktuell): " + pg.inner_text(".toast-zone"))
+    # … mit neuer Version: Fenster mit „Jetzt aktualisieren“, Hinweis auf der Startseite
+    pg.evaluate("window.__update = {have: '0.2.0', channels: ['normal', 'beta'], available: true, update: {version: '0.2.1', mandatory: false}}")
+    pg.click("#settingsRoot button:has-text('Nach Update suchen')")
+    pg.wait_for_timeout(300)
+    if "Neue Version 0.2.1 ist bereit" not in modal(pg) or "bereit" not in pg.inner_text("#updateBox"):
+        errors.append(f"Nach Update suchen (neu): {modal(pg)!r} {pg.inner_text('#updateBox')!r}")
+    pg.screenshot(path=str(OUT / "update-bereit.png"))
+    pg.click(".dlg button:has-text('Jetzt aktualisieren')")
+    pg.wait_for_timeout(200)
+    if len(calls(pg, "update_install")) != 1:
+        errors.append("Jetzt aktualisieren startet kein Update")
+    pg.context.close()
+    # Windows-Meldungen: nur im Hintergrund und ohne Spiel, abschaltbar
+    pg = page_for(b, "launcher.html", session, init={"__gameRunning": False})
+    pg.evaluate("document.querySelectorAll('.dlg').forEach(d => d.remove()); document.hasFocus = () => false")
+    pg.evaluate("window.__emit('api', {t: 'online', steam: '%s', name: 'Bert'})" % B)
+    pg.evaluate("window.__emit('api', {t: 'emergency', steam: '%s', name: 'Dora', x: 1, y: 2})" % D)
+    pg.wait_for_timeout(200)
+    n = calls(pg, "notify")
+    if [x["title"] for x in n] != ["Freund online", "Clan-Notruf"] or "Bert" not in n[0]["body"]:
+        errors.append(f"Windows-Meldungen: {n}")
+    pg.evaluate("window.__emit('game', {running: true})")
+    pg.evaluate("window.__emit('api', {t: 'online', steam: '%s', name: 'Bert'})" % B)
+    pg.evaluate("window.__emit('game', {running: false}); document.hasFocus = () => true")
+    pg.evaluate("window.__emit('api', {t: 'online', steam: '%s', name: 'Bert'})" % B)
+    pg.evaluate("document.hasFocus = () => false")
+    pg.click(".nav[data-page=settings]")
+    pg.click("#settingsRoot label.opt:has-text('Freund kommt online') .switch")
+    pg.evaluate("window.__emit('api', {t: 'online', steam: '%s', name: 'Bert'})" % B)
+    pg.wait_for_timeout(200)
+    if len(calls(pg, "notify")) != 2:
+        errors.append(f"Windows-Meldung trotz Spiel/Fokus/aus: {calls(pg, 'notify')}")
+    pg.click("#settingsRoot button:has-text('Testen')")
+    if len(calls(pg, "notify")) != 3:
+        errors.append("Test-Meldung fehlt")
+    # Fehlerbericht: zu kurz, dann senden, Ticket-Link öffnen
+    pg.click("#settingsRoot button:has-text('Fehlerbericht senden')")
+    pg.fill(".dlg textarea", "kaputt")
+    pg.click(".dlg button:has-text('Senden')")
+    if "genauer" not in modal(pg) or calls(pg, "bug_report"):
+        errors.append("Fehlerbericht: zu kurzer Text nicht abgelehnt")
+    pg.fill(".dlg textarea", "Die Karte bleibt nach dem Start schwarz.")
+    pg.screenshot(path=str(OUT / "fehlerbericht.png"))
+    pg.click(".dlg button:has-text('Senden')")
+    pg.wait_for_timeout(300)
+    br = calls(pg, "bug_report")
+    if len(br) != 1 or br[0]["text"] != "Die Karte bleibt nach dem Start schwarz." or "Ticket #9" not in modal(pg):
+        errors.append(f"Fehlerbericht: {br} {modal(pg)!r}")
+    pg.click(".dlg button:has-text('Ticket im Discord öffnen')")
+    if calls(pg, "open_link")[-1:] != [{"url": "https://discord.com/channels/1/9"}]:
+        errors.append(f"Fehlerbericht: Ticket-Link {calls(pg, 'open_link')}")
+    pg.evaluate("window.__bug = {ok: false, msg: 'Tickets laufen über unseren Discord. Verknüpfe zuerst dein Discord-Konto.'}")
+    pg.click("#settingsRoot button:has-text('Fehlerbericht senden')")
+    pg.fill(".dlg textarea", "Noch ein Fehler mit genug Text.")
+    pg.click(".dlg button:has-text('Senden')")
+    pg.wait_for_timeout(300)
+    if "Verknüpfe zuerst" not in modal(pg):
+        errors.append("Fehlerbericht ohne Discord: keine Meldung " + modal(pg))
+    pg.evaluate("document.querySelectorAll('.dlg').forEach(d => d.remove())")
+    pg.screenshot(path=str(OUT / "einstellungen-neu.png"), full_page=True)
+    # Ohne gespeicherte Anmeldung: Anmelde-Bildschirm mit Grund im Log; mit Anmeldung bleibt die Oberfläche offen,
+    # auch wenn beim Laden etwas schiefgeht (Ticket #4)
+    lo = page_for(b, "launcher.html", None, init={"__gameRunning": False})
+    if lo.locator("#login").is_hidden() or not any("keine gespeicherte Anmeldung" in x for x in lo.evaluate("window.__log || []")):
+        errors.append(f"Start ohne Anmeldung: {lo.evaluate('window.__log || []')}")
+    lo.context.close()
+    n_err = len(errors)
+    br = page_for(b, "launcher.html", session, init={"__gameRunning": False},
+                  api_extra={"/api/social": {"ok": True, "friends": 5, "requests": None, "clan": "kaputt"}})
+    del errors[n_err:]  # die kaputten Testdaten werfen absichtlich Fehler in der Oberfläche
+    if br.locator("#shell").is_hidden() or br.locator("#login").is_visible():
+        errors.append("Start mit kaputten Daten: zurück zur Anmeldung " + str(br.evaluate("window.__log || []")))
+    br.context.close()
+    # Log: Fehler der Oberfläche und Warnmeldungen landen im Log
+    pg.evaluate("import('./js/core.js').then(m => m.toast('Testfehler', 'bad'))")
+    pg.wait_for_timeout(100)
+    if not any("Testfehler" in x for x in pg.evaluate("window.__log || []")):
+        errors.append(f"Log der Oberfläche: {pg.evaluate('window.__log || []')}")
+    pg.context.close()
+
+
 def check_route(path):
     """Route mit denselben Geländedaten nachprüfen: zwischen zwei Rasterpunkten nie steiler als 45°, nie Meer."""
     import gzip
@@ -536,6 +659,7 @@ with sync_playwright() as p:
         errors.append("3D-Karte: Zurückschalten auf 2D klappt nicht")
 
     start_flow(b, session)
+    features_flow(b, session)
     share_flow(b, session)
     hint_flow(b, session)
     profile_flow(b, session)
